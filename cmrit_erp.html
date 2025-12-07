@@ -1,0 +1,775 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Student Manager — Attendance & Marks</title>
+<style>
+  :root{
+    --bg: linear-gradient(180deg,#071124,#0b2440);
+    --glass: rgba(255,255,255,0.04);
+    --accent: #6c9cff;
+    --accent-2: #60f0d8;
+    --muted: #a8b4d1;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;color:#e8eefb;
+    background:var(--bg);min-height:100vh;padding:18px;
+  }
+
+  .app { max-width:1100px;margin:0 auto; display:grid; gap:12px; }
+
+  .topbar{ display:flex;justify-content:space-between;align-items:center; gap:12px; }
+  .brand{display:flex;gap:12px;align-items:center}
+  .logo{width:56px;height:56px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--accent),var(--accent-2));font-size:24px;color:#031327}
+  .title{font-weight:700;font-size:1.05rem}
+  .subtitle{font-size:0.85rem;color:var(--muted)}
+
+  .card{ background:var(--glass); border-radius:12px; padding:14px; box-shadow:0 10px 30px rgba(2,6,23,0.45); backdrop-filter: blur(8px); }
+
+  /* nav tabs */
+  .tabs{ display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .tab{ padding:8px 12px; border-radius:10px; cursor:pointer; background:transparent; color:var(--muted); border:1px solid transparent; }
+  .tab.active{ background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#031327; font-weight:700; box-shadow:0 8px 20px rgba(35,99,255,0.12) }
+
+  /* layout */
+  .grid{ display:grid; grid-template-columns:1fr 360px; gap:14px; }
+  @media (max-width:980px) { .grid{grid-template-columns:1fr} .rightCol{order:-1} }
+
+  /* forms */
+  input, select, textarea { width:100%; padding:10px 12px; border-radius:10px; border:1px solid rgba(255,255,255,0.06); background:transparent; color:inherit; margin-top:8px; }
+  button{ padding:10px 12px; border-radius:10px; border:none; cursor:pointer; background:linear-gradient(90deg,var(--accent),var(--accent-2)); color:#031327; font-weight:700; margin-top:8px; }
+  button.ghost{ background:transparent;color:var(--accent); border:1px solid rgba(108,156,255,0.12) }
+  button.warn{ background:#ff6b6b;color:#fff }
+
+  .small{ font-size:0.85rem; color:var(--muted) }
+  .muted{ color:var(--muted) }
+
+  /* table */
+  .table-wrap{ overflow:auto; max-height:420px; border-radius:10px; margin-top:10px; }
+  table{ width:100%; border-collapse:collapse; font-size:0.95rem; }
+  th, td { padding:10px; text-align:left; border-bottom:1px solid rgba(255,255,255,0.04) }
+  th{ font-size:0.8rem; color:var(--muted); text-transform:uppercase }
+  tr:hover td{ background: linear-gradient(90deg, rgba(108,156,255,0.03), transparent) }
+
+  .actions{ display:flex; gap:8px; justify-content:flex-end }
+  .chip{ padding:6px 10px; border-radius:999px; background:rgba(255,255,255,0.06); font-weight:700 }
+
+  /* pagination */
+  .pagination{ display:flex; gap:8px; align-items:center; justify-content:center; margin-top:10px }
+
+  /* popup */
+  .overlay{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:linear-gradient(180deg,rgba(1,6,20,0.6),rgba(1,6,20,0.85)); z-index:40 }
+  .modal{ width:360px; max-width:92%; }
+
+  /* attendance table small */
+  .attendance-row{ display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 0; border-bottom:1px dashed rgba(255,255,255,0.03) }
+
+  /* report card */
+  .report{ background:linear-gradient(180deg,#fff,#f7fbff); color:#071227; padding:18px; border-radius:10px }
+  .report h3{ margin:0 }
+
+  /* responsive tweaks */
+  @media (max-width:520px){
+    .topbar{ flex-direction:column; align-items:flex-start }
+  }
+
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="logo">🎓</div>
+      <div>
+        <div class="title">Student Manager</div>
+        <div class="subtitle small">Attendance • Marks • Report Cards</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center">
+      <div id="userBadge" class="chip">Not signed in</div>
+      <button id="logoutBtn" class="ghost" style="display:none">Logout</button>
+    </div>
+  </div>
+
+  <!-- AUTH CARD -->
+  <div id="authCard" class="card" style="margin-top:8px;">
+    <div style="display:flex;gap:12px;align-items:center;justify-content:space-between">
+      <div>
+        <div style="font-weight:700">Admin Login</div>
+        <div class="muted small">Use default credentials (admin / 123) or register below</div>
+      </div>
+      <div style="max-width:360px;width:100%">
+        <input id="loginUser" placeholder="username">
+        <input id="loginPass" placeholder="password" type="password">
+        <div style="display:flex;gap:8px">
+          <button id="loginBtn">Sign In</button>
+          <button id="regBtn" class="ghost">Register</button>
+        </div>
+        <div class="small muted" id="authMsg"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NAV TABS -->
+  <div id="mainUI" style="display:none">
+    <div class="card">
+      <div class="tabs" role="tablist">
+        <div class="tab active" data-tab="students">Students</div>
+        <div class="tab" data-tab="attendance">Attendance</div>
+        <div class="tab" data-tab="marks">Marks</div>
+        <div class="tab" data-tab="report">Report Card</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <!-- LEFT: main content -->
+      <div>
+
+        <!-- STUDENTS TAB -->
+        <div id="studentsTab" class="card page" style="display:block">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:800">Students</div>
+              <div class="small muted">Add, edit or remove student records</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="searchInput" placeholder="Search name / course / roll" style="width:260px">
+              <button id="addStudentBtn">Add Student</button>
+            </div>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Name</th><th>Course</th><th>Roll</th><th style="width:150px">Actions</th></tr></thead>
+              <tbody id="studentsTable"></tbody>
+            </table>
+          </div>
+
+          <div class="pagination">
+            <button id="prevPage" class="ghost">Prev</button>
+            <div id="pageInfo" class="small muted"></div>
+            <button id="nextPage" class="ghost">Next</button>
+          </div>
+        </div>
+
+        <!-- ATTENDANCE TAB -->
+        <div id="attendanceTab" class="card page" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:12px">
+            <div>
+              <div style="font-weight:800">Attendance</div>
+              <div class="small muted">Mark present / absent for a date</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input id="attDate" type="date">
+              <button id="loadAttendanceBtn" class="ghost">Load</button>
+              <button id="saveAttendanceBtn">Save</button>
+            </div>
+          </div>
+
+          <div id="attendanceList" style="margin-top:12px;max-height:420px;overflow:auto">
+            <!-- JS will populate rows -->
+          </div>
+
+          <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+            <div class="small muted">Selected date attendance summary:</div>
+            <div id="attSummary" class="chip">No date</div>
+          </div>
+        </div>
+
+        <!-- MARKS TAB -->
+        <div id="marksTab" class="card page" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:800">Marks</div>
+              <div class="small muted">Add subjects & marks per student</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="marksStudentSelect"></select>
+            </div>
+          </div>
+
+          <div style="margin-top:12px">
+            <div style="display:flex;gap:8px">
+              <input id="subjectInput" placeholder="Subject name">
+              <input id="markInput" type="number" placeholder="Marks">
+              <button id="addMarkBtn">Add</button>
+            </div>
+
+            <div id="marksList" style="margin-top:12px"></div>
+          </div>
+        </div>
+
+        <!-- REPORT TAB -->
+        <div id="reportTab" class="card page" style="display:none">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div style="font-weight:800">Report Card</div>
+              <div class="small muted">Select student to generate printable report</div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <select id="reportStudentSelect"></select>
+              <button id="generateReportBtn">Generate</button>
+              <button id="printReportBtn" class="ghost">Print</button>
+            </div>
+          </div>
+
+          <div id="reportArea" style="margin-top:12px"></div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT: small dashboard & export -->
+      <div class="rightCol">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div>
+              <div class="small muted">Totals</div>
+              <div style="font-weight:800;font-size:1.2rem" id="totalStudents">0 Students</div>
+            </div>
+            <div class="chip" id="todayChip">Today</div>
+          </div>
+
+          <div style="margin-top:12px" class="small muted">Quick actions</div>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button id="exportCsvBtn" class="ghost">Export CSV</button>
+            <button id="clearAllBtn" class="warn">Clear All</button>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <div class="small muted">Attendance Overview</div>
+          <div style="margin-top:8px">
+            <div class="small muted">Select date to view averages</div>
+            <input id="overviewDate" type="date" style="margin-top:8px">
+            <button id="viewOverviewBtn" class="ghost" style="margin-top:8px">View</button>
+            <div id="overviewResult" style="margin-top:10px" class="small muted">No date selected</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL (Add/Edit Student) -->
+<div id="modal" class="overlay">
+  <div class="modal card">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div style="font-weight:800" id="modalTitle">Add Student</div>
+      <div><button id="closeModalBtn" class="ghost">Close</button></div>
+    </div>
+
+    <input id="nameInput" placeholder="Student name">
+    <input id="courseInput" placeholder="Course">
+    <input id="rollInput" placeholder="Roll number">
+    <div style="display:flex;gap:8px">
+      <button id="saveStudentBtn">Save</button>
+      <button id="cancelStudentBtn" class="ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================
+ Single-file Student Manager
+ - Login (admin/123)
+ - Students CRUD (with id)
+ - Pagination + Search
+ - Attendance by date (present/absent)
+ - Marks per student (subjects -> marks)
+ - Report card generator printable
+ - LocalStorage persistence
+============================ */
+
+const STORAGE = {
+  STUDENTS: 'sms_students_v1',
+  ATTENDANCE: 'sms_attendance_v1',
+  MARKS: 'sms_marks_v1',
+  USERS: 'sms_users_v1'
+};
+
+// ---------- Utilities ----------
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+function money(x){ return Number(x||0).toFixed(2) }
+function qs(id){ return document.getElementById(id) }
+
+// load/save
+function load(key){ try { return JSON.parse(localStorage.getItem(key) || 'null') || null } catch(e){ return null } }
+function save(key, val){ localStorage.setItem(key, JSON.stringify(val)) }
+
+/* ---------- Data state ---------- */
+let students = load(STORAGE.STUDENTS) || []; // array of {id,name,course,roll}
+let attendance = load(STORAGE.ATTENDANCE) || {}; // { 'YYYY-MM-DD': { studentId: true/false } }
+let marks = load(STORAGE.MARKS) || {}; // { studentId: [ { id, subject, mark } ] }
+let users = load(STORAGE.USERS) || {}; // { username: password } (simple demo)
+let currentUser = null;
+
+/* ---------- Pagination ---------- */
+let page = 1, limit = 6;
+
+/* ---------- Init UI Elements ---------- */
+const authCard = qs('authCard');
+const mainUI = qs('mainUI');
+const userBadge = qs('userBadge');
+const logoutBtn = qs('logoutBtn');
+const loginBtn = qs('loginBtn');
+const regBtn = qs('regBtn');
+const loginUser = qs('loginUser');
+const loginPass = qs('loginPass');
+const authMsg = qs('authMsg');
+
+const tabs = document.querySelectorAll('.tab');
+const studentsTab = qs('studentsTab');
+const attendanceTab = qs('attendanceTab');
+const marksTab = qs('marksTab');
+const reportTab = qs('reportTab');
+
+const studentsTable = qs('studentsTable');
+const searchInput = qs('searchInput');
+const addStudentBtn = qs('addStudentBtn');
+const prevPageBtn = qs('prevPage');
+const nextPageBtn = qs('nextPage');
+const pageInfo = qs('pageInfo');
+const totalStudents = qs('totalStudents');
+
+const modal = qs('modal');
+const modalTitle = qs('modalTitle');
+const closeModalBtn = qs('closeModalBtn');
+const saveStudentBtn = qs('saveStudentBtn');
+const cancelStudentBtn = qs('cancelStudentBtn');
+const nameInput = qs('nameInput');
+const courseInput = qs('courseInput');
+const rollInput = qs('rollInput');
+
+const attDate = qs('attDate');
+const loadAttendanceBtn = qs('loadAttendanceBtn');
+const saveAttendanceBtn = qs('saveAttendanceBtn');
+const attendanceList = qs('attendanceList');
+const attSummary = qs('attSummary');
+
+const marksStudentSelect = qs('marksStudentSelect');
+const subjectInput = qs('subjectInput');
+const markInput = qs('markInput');
+const addMarkBtn = qs('addMarkBtn');
+const marksList = qs('marksList');
+
+const reportStudentSelect = qs('reportStudentSelect');
+const generateReportBtn = qs('generateReportBtn');
+const printReportBtn = qs('printReportBtn');
+const reportArea = qs('reportArea');
+
+const exportCsvBtn = qs('exportCsvBtn');
+const clearAllBtn = qs('clearAllBtn');
+
+const overviewDate = qs('overviewDate');
+const viewOverviewBtn = qs('viewOverviewBtn');
+const overviewResult = qs('overviewResult');
+
+let editStudentId = null;
+
+/* ---------- Auth handlers ---------- */
+// default admin
+if(!users['admin']){ users['admin'] = '123'; save(STORAGE.USERS, users) }
+
+loginBtn.addEventListener('click', ()=> {
+  const u = loginUser.value.trim(); const p = loginPass.value;
+  if(!u || !p){ authMsg.innerText = 'enter credentials'; return; }
+  if(users[u] && users[u] === p){
+    authSuccess(u);
+    return;
+  }
+  authMsg.innerText = 'invalid credentials';
+});
+
+regBtn.addEventListener('click', ()=> {
+  const u = prompt('Choose username (demo storage)', 'newadmin');
+  if(!u) return;
+  const p = prompt('Choose password', 'pass123');
+  if(!p) return;
+  users[u] = p; save(STORAGE.USERS, users);
+  alert('Registered. You can now sign in.');
+});
+
+function authSuccess(user){
+  currentUser = user;
+  userBadge.innerText = user;
+  authCard.style.display = 'none';
+  mainUI.style.display = 'block';
+  logoutBtn.style.display = 'inline-block';
+  qs('authMsg').innerText = '';
+  save('sms_last_user', user);
+  renderAll();
+}
+
+logoutBtn.addEventListener('click', ()=> {
+  currentUser = null;
+  userBadge.innerText = 'Not signed in';
+  authCard.style.display = '';
+  mainUI.style.display = 'none';
+  logoutBtn.style.display = 'none';
+  loginUser.value = ''; loginPass.value = '';
+  save('sms_last_user', '');
+});
+
+/* auto login last */
+const last = localStorage.getItem('sms_last_user');
+if(last && users[last]) setTimeout(()=> authSuccess(last), 600);
+
+/* ---------- Tabs ---------- */
+tabs.forEach(t => t.addEventListener('click', ()=>{
+  tabs.forEach(x=>x.classList.remove('active')); t.classList.add('active');
+  const tab = t.dataset.tab;
+  document.querySelectorAll('.page').forEach(p=>p.style.display='none');
+  if(tab==='students') studentsTab.style.display='block';
+  if(tab==='attendance') attendanceTab.style.display='block';
+  if(tab==='marks') marksTab.style.display='block';
+  if(tab==='report') reportTab.style.display='block';
+}));
+
+/* ---------- Students CRUD & UI ---------- */
+function renderStudentsTable(){
+  const q = searchInput.value.trim().toLowerCase();
+  const filtered = students.filter(s => s.name.toLowerCase().includes(q) || s.course.toLowerCase().includes(q) || s.roll.toLowerCase().includes(q));
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / limit));
+  if(page > pages) page = pages;
+  const start = (page-1)*limit;
+  const slice = filtered.slice(start, start+limit);
+
+  studentsTable.innerHTML = slice.map(s => `
+    <tr>
+      <td>${escapeHtml(s.name)}</td>
+      <td>${escapeHtml(s.course)}</td>
+      <td>${escapeHtml(s.roll)}</td>
+      <td class="actions">
+        <button class="ghost" onclick="startEdit('${s.id}')">Edit</button>
+        <button class="ghost" onclick="startTakeAttendance('${s.id}')">Mark</button>
+        <button class="warn" onclick="removeStudent('${s.id}')">Delete</button>
+      </td>
+    </tr>
+  `).join('') || `<tr><td colspan="4" class="muted">No students</td></tr>`;
+
+  pageInfo.innerText = `Page ${page} / ${pages} • ${total} result(s)`;
+  totalStudents.innerText = `${students.length} Students`;
+
+  // update selects
+  updateStudentSelects();
+}
+
+searchInput.addEventListener('input', ()=> { page = 1; renderStudentsTable() });
+prevPageBtn.addEventListener('click', ()=> { if(page>1) { page--; renderStudentsTable() }});
+nextPageBtn.addEventListener('click', ()=> { page++; renderStudentsTable() });
+
+addStudentBtn.addEventListener('click', ()=> openModal());
+
+function openModal(edit=false){
+  modal.style.display = 'flex';
+  qs('modal').style.display = 'block';
+  nameInput.focus();
+  if(!edit){ modalTitle.innerText = 'Add Student'; nameInput.value=''; courseInput.value=''; rollInput.value=''; editStudentId=null; }
+}
+
+closeModalBtn.addEventListener('click', closeModal);
+cancelStudentBtn.addEventListener('click', closeModal);
+function closeModal(){ modal.style.display='none'; qs('modal').style.display='none'; editStudentId=null; }
+
+saveStudentBtn.addEventListener('click', ()=>{
+  const name = nameInput.value.trim(), course = courseInput.value.trim(), roll = rollInput.value.trim();
+  if(!name || !course || !roll){ alert('Fill all fields'); return; }
+  if(editStudentId){
+    const idx = students.findIndex(s=>s.id===editStudentId);
+    if(idx>-1){ students[idx].name=name; students[idx].course=course; students[idx].roll=roll; }
+  } else {
+    students.push({ id: uid(), name, course, roll });
+  }
+  save(STORAGE.STUDENTS, students);
+  closeModal(); renderStudentsTable();
+});
+
+/* exposed helpers for table buttons */
+window.startEdit = function(id){
+  const s = students.find(x=>x.id===id); if(!s) return;
+  editStudentId = id;
+  modalTitle.innerText = 'Edit Student';
+  nameInput.value = s.name; courseInput.value = s.course; rollInput.value = s.roll;
+  openModal(true);
+};
+
+window.removeStudent = function(id){
+  if(!confirm('Delete student?')) return;
+  students = students.filter(s=>s.id!==id);
+  save(STORAGE.STUDENTS, students);
+  // also remove marks and attendance entries
+  delete marks[id];
+  for(const d in attendance){ if(attendance[d] && attendance[d][id]!==undefined){ delete attendance[d][id]; } }
+  save(STORAGE.MARKS, marks); save(STORAGE.ATTENDANCE, attendance); renderStudentsTable(); renderAll();
+};
+
+/* ---------- Attendance ---------- */
+function formatDate(d){ return d ? d.slice(0,10) : new Date().toISOString().slice(0,10) }
+
+loadAttendanceBtn.addEventListener('click', ()=> loadAttendanceForDate(attDate.value || formatDate()) );
+saveAttendanceBtn.addEventListener('click', ()=> { saveAttendanceForDate(attDate.value || formatDate()); alert('Attendance saved') });
+
+function loadAttendanceForDate(dateStr){
+  const date = formatDate(dateStr || formatDate());
+  attDate.value = date;
+  attendanceList.innerHTML = '';
+  const map = attendance[date] || {};
+  students.forEach(s => {
+    const present = map[s.id] === true;
+    const div = document.createElement('div');
+    div.className = 'attendance-row';
+    div.innerHTML = `<div><strong>${escapeHtml(s.name)}</strong><div class="small muted">${escapeHtml(s.course)} • ${escapeHtml(s.roll)}</div></div>
+                     <div><label class="small muted">Present <input type="checkbox" ${present ? 'checked':''} data-id="${s.id}"></label></div>`;
+    attendanceList.appendChild(div);
+  });
+  updateAttendanceSummary(date);
+  // attach change handlers
+  attendanceList.querySelectorAll('input[type="checkbox"]').forEach(ch => {
+    ch.addEventListener('change', ()=> updateAttendanceSummary(date));
+  });
+}
+
+function saveAttendanceForDate(dateStr){
+  const date = formatDate(dateStr || formatDate());
+  const map = attendance[date] || {};
+  attendanceList.querySelectorAll('input[type="checkbox"]').forEach(ch => {
+    const id = ch.dataset.id;
+    map[id] = ch.checked;
+  });
+  attendance[date] = map;
+  save(STORAGE.ATTENDANCE, attendance);
+  updateAttendanceSummary(date);
+}
+
+function updateAttendanceSummary(date){
+  const map = attendance[date] || {};
+  const total = students.length;
+  let present = 0;
+  for(const s of students) if(map[s.id]) present++;
+  attSummary.innerText = `${present} / ${total} present (${ total? Math.round(present/total*100):0 }%)`;
+}
+
+/* quick mark for a single student (from table) */
+window.startTakeAttendance = function(studentId){
+  const date = formatDate();
+  attDate.value = date;
+  loadAttendanceForDate(date);
+  // toggle student's checkbox
+  setTimeout(()=> {
+    const ch = attendanceList.querySelector(`input[data-id="${studentId}"]`);
+    if(ch) { ch.checked = !ch.checked; updateAttendanceSummary(date); }
+  }, 100);
+}
+
+/* ---------- Overview ---------- */
+viewOverviewBtn.addEventListener('click', ()=>{
+  const d = overviewDate.value; if(!d){ overviewResult.innerText = 'Pick a date'; return; }
+  const map = attendance[d] || {};
+  const total = students.length;
+  let present=0;
+  students.forEach(s=>{ if(map[s.id]) present++; });
+  overviewResult.innerText = `${present} / ${total} present • ${ total ? Math.round(present/total*100) : 0 }%`;
+});
+
+/* ---------- Marks module ---------- */
+function updateStudentSelects(){
+  // marks student select and report select
+  const select1 = marksStudentSelect; const select2 = reportStudentSelect;
+  select1.innerHTML = '<option value="">Select student</option>';
+  select2.innerHTML = '<option value="">Select student</option>';
+  students.forEach(s => {
+    const opt = `<option value="${s.id}">${escapeHtml(s.name)} — ${escapeHtml(s.roll)}</option>`;
+    select1.insertAdjacentHTML('beforeend', opt);
+    select2.insertAdjacentHTML('beforeend', opt);
+  });
+  // default selection
+  if(students.length && !select1.value){ select1.value = students[0].id; select2.value = students[0].id; }
+  renderMarksList();
+}
+
+marksStudentSelect.addEventListener('change', renderMarksList);
+addMarkBtn.addEventListener('click', ()=>{
+  const sid = marksStudentSelect.value;
+  if(!sid){ alert('Select student'); return; }
+  const subj = subjectInput.value.trim(); const m = parseFloat(markInput.value);
+  if(!subj || isNaN(m)){ alert('Enter subject and marks'); return; }
+  marks[sid] = marks[sid] || [];
+  marks[sid].push({ id: uid(), subject: subj, mark: Number(m) });
+  save(STORAGE.MARKS, marks);
+  subjectInput.value=''; markInput.value='';
+  renderMarksList();
+});
+
+function renderMarksList(){
+  const sid = marksStudentSelect.value;
+  marksList.innerHTML = '';
+  if(!sid){ marksList.innerHTML = '<div class="small muted">Select student to view marks</div>'; return; }
+  const arr = marks[sid] || [];
+  if(!arr.length){ marksList.innerHTML = '<div class="small muted">No marks yet</div>'; return; }
+  const table = document.createElement('table');
+  table.innerHTML = `<thead><tr><th>Subject</th><th>Marks</th><th style="width:120px">Actions</th></tr></thead>`;
+  const tbody = document.createElement('tbody');
+  arr.forEach(mk=>{
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${escapeHtml(mk.subject)}</td><td>${mk.mark}</td>
+      <td class="actions"><button class="ghost" onclick="editMark('${sid}','${mk.id}')">Edit</button>
+      <button class="warn" onclick="removeMark('${sid}','${mk.id}')">Delete</button></td>`;
+    tbody.appendChild(tr);
+  });
+  table.appendChild(tbody);
+  // summary row
+  const total = arr.reduce((s,x)=>s + Number(x.mark||0), 0);
+  const avg = arr.length ? (total / arr.length) : 0;
+  table.insertAdjacentHTML('beforeend', `<tfoot><tr><td><b>Total</b></td><td><b>${total}</b></td><td><b>Avg: ${avg.toFixed(2)}</b></td></tr></tfoot>`);
+  marksList.appendChild(table);
+}
+
+window.editMark = function(studentId, markId){
+  const arr = marks[studentId] || []; const m = arr.find(x=>x.id===markId);
+  if(!m) return;
+  const subj = prompt('Subject', m.subject); if(subj===null) return;
+  const mm = prompt('Marks', String(m.mark)); if(mm===null) return;
+  m.subject = subj; m.mark = Number(mm); save(STORAGE.MARKS, marks); renderMarksList();
+}
+window.removeMark = function(studentId, markId){
+  if(!confirm('Delete mark?')) return;
+  marks[studentId] = (marks[studentId] || []).filter(x=>x.id!==markId);
+  save(STORAGE.MARKS, marks); renderMarksList();
+}
+
+/* ---------- Report Card ---------- */
+generateReportBtn.addEventListener('click', ()=> {
+  const sid = reportStudentSelect.value;
+  if(!sid){ alert('Select student'); return; }
+  renderReportForStudent(sid);
+});
+printReportBtn.addEventListener('click', ()=> {
+  if(!reportArea.innerHTML) { alert('Generate a report first'); return; }
+  const w = window.open('','_blank'); w.document.write(`<html><head><title>Report Card</title></head><body>${reportArea.innerHTML}</body></html>`); w.document.close(); w.print();
+});
+
+function renderReportForStudent(sid){
+  const s = students.find(x=>x.id===sid); if(!s) { alert('Student not found'); return; }
+  const arr = marks[sid] || [];
+  const total = arr.reduce((sum,x)=>sum + Number(x.mark||0), 0);
+  const maxTotal = arr.length ? arr.length * 100 : 0; // assuming out of 100 each
+  const percent = maxTotal ? (total / maxTotal) * 100 : 0;
+  const grade = computeGrade(percent);
+
+  // attendance percentage across all dates
+  const attPercent = calculateAttendancePercentForStudent(sid);
+
+  reportArea.innerHTML = `
+    <div class="report">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <h3>Report Card</h3>
+          <div class="small muted">Student: <strong>${escapeHtml(s.name)}</strong> • Roll: ${escapeHtml(s.roll)}</div>
+          <div class="small muted">Course: ${escapeHtml(s.course)}</div>
+        </div>
+        <div style="text-align:right">
+          <div class="small muted">Generated:</div>
+          <div>${new Date().toLocaleString()}</div>
+        </div>
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid rgba(0,0,0,0.06)">
+
+      <h4>Marks</h4>
+      ${ arr.length ? `<table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left">Subject</th><th style="text-align:left">Marks</th></tr></thead>
+        <tbody>${arr.map(mk=>`<tr><td style="padding:6px;border-bottom:1px solid #eee">${escapeHtml(mk.subject)}</td><td style="padding:6px;border-bottom:1px solid #eee">${mk.mark}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="small muted">No marks recorded</div>' }
+
+      <div style="margin-top:12px;display:flex;justify-content:space-between">
+        <div><b>Total:</b> ${total} / ${maxTotal || '-'} </div>
+        <div><b>Percent:</b> ${percent.toFixed(2)}%</div>
+        <div><b>Grade:</b> ${grade}</div>
+      </div>
+
+      <hr style="margin:12px 0;border:none;border-top:1px solid rgba(0,0,0,0.06)">
+
+      <div><b>Attendance:</b> ${attPercent.toFixed(2)}% (across recorded dates)</div>
+    </div>
+  `;
+}
+
+function computeGrade(pct){
+  if(pct >= 90) return 'A+';
+  if(pct >= 80) return 'A';
+  if(pct >= 70) return 'B+';
+  if(pct >= 60) return 'B';
+  if(pct >= 50) return 'C';
+  return 'F';
+}
+function calculateAttendancePercentForStudent(studentId){
+  const dates = Object.keys(attendance);
+  if(!dates.length) return 0;
+  let present = 0; let total = 0;
+  for(const d of dates){
+    const map = attendance[d] || {};
+    if(map[studentId] !== undefined){ total++; if(map[studentId]) present++; }
+  }
+  return total ? (present / total) * 100 : 0;
+}
+
+/* ---------- Export CSV & Clear ---------- */
+exportCsvBtn.addEventListener('click', ()=>{
+  const rows = [['Name','Course','Roll']];
+  students.forEach(s => rows.push([s.name,s.course,s.roll]));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv' }); const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = `students_${new Date().toISOString().slice(0,10)}.csv`; a.click(); URL.revokeObjectURL(url);
+});
+
+clearAllBtn.addEventListener('click', ()=>{
+  if(!confirm('Clear all students, attendance and marks?')) return;
+  students=[]; attendance={}; marks={}; save(STORAGE.STUDENTS, students); save(STORAGE.ATTENDANCE, attendance); save(STORAGE.MARKS, marks); renderAll();
+});
+
+/* ---------- Helper render All ---------- */
+function renderAll(){
+  renderStudentsTable();
+  updateStudentSelects();
+  // set today
+  const today = new Date().toISOString().slice(0,10);
+  qs('todayChip').innerText = today;
+  if(!attDate.value) attDate.value = today;
+  // if attendance for today exists, load
+  // render marks list default
+  renderMarksList();
+}
+
+/* ---------- Utility helpers ---------- */
+function escapeHtml(s){
+  if(!s) return '';
+  return String(s).replace(/[&<>"'`]/g, function(m){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'})[m]; });
+}
+
+/* ---------- Initial load from storage ---------- */
+(function initFromStorage(){
+  students = load(STORAGE.STUDENTS) || [];
+  attendance = load(STORAGE.ATTENDANCE) || {};
+  marks = load(STORAGE.MARKS) || {};
+  users = load(STORAGE.USERS) || users;
+  updateStudentSelects();
+  renderAll();
+})();
+
+/* ---------- small UX: switch tabs with keys (1-4) ---------- */
+document.addEventListener('keydown', (e)=>{
+  if(e.key === '1') document.querySelector('.tab[data-tab="students"]').click();
+  if(e.key === '2') document.querySelector('.tab[data-tab="attendance"]').click();
+  if(e.key === '3') document.querySelector('.tab[data-tab="marks"]').click();
+  if(e.key === '4') document.querySelector('.tab[data-tab="report"]').click();
+});
+
+</script>
+</body>
+</html> 
